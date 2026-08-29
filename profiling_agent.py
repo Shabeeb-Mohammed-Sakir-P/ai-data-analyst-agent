@@ -1,4 +1,5 @@
 import pandas as pd
+from llm_client import call_llm
 
 
 def detect_dtype_issues(df: pd.DataFrame) -> list:
@@ -72,8 +73,31 @@ def analyze_dataset(filepath: str) -> dict:
     return findings
 
 
+def summarize_findings(findings: dict) -> str:
+    """
+    Takes the raw profiling findings and asks an LLM to explain them
+    in plain, human-readable language.
+    """
+    prompt = f"""You are a data analyst assistant. Below are automated profiling
+results for a dataset, in JSON format. Write a short, clear summary (4-6 sentences)
+explaining the data quality issues found, in plain English a non-technical person
+could understand. Be specific about which columns have problems and roughly how
+severe each issue is. Do not just repeat the JSON — actually explain it.
+
+Findings:
+{findings}
+"""
+    return call_llm(prompt)
+
+
 # Quick test — only runs if you execute this file directly
 if __name__ == "__main__":
     results = analyze_dataset("data/sample_messy_customers.csv")
+
     import json
+    print("=== Raw findings ===")
     print(json.dumps(results, indent=2, default=str))
+
+    print("\n=== Plain-English summary ===")
+    summary = summarize_findings(results)
+    print(summary)
