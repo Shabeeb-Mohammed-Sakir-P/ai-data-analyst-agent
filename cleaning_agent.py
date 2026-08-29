@@ -1,7 +1,6 @@
-import json
-import re
 import pandas as pd
 from llm_client import call_llm
+from utils import parse_json_response
 
 
 def propose_cleaning_actions(findings: dict) -> list:
@@ -28,26 +27,7 @@ Findings:
 Respond with ONLY the JSON array, starting with [ and ending with ]."""
 
     raw_response = call_llm(prompt)
-    return _parse_json_response(raw_response)
-
-
-def _parse_json_response(raw_response: str) -> list:
-    """
-    LLMs sometimes wrap JSON in ```json code fences or add extra text
-    despite instructions not to. This function cleans that up before parsing.
-    """
-    cleaned = raw_response.strip()
-
-    # Remove markdown code fences if present
-    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-    cleaned = re.sub(r"\s*```$", "", cleaned)
-
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        print("Warning: Could not parse LLM response as JSON. Raw response was:")
-        print(raw_response)
-        return []
+    return parse_json_response(raw_response)
 
 
 def apply_cleaning_action(df: pd.DataFrame, action: dict) -> pd.DataFrame:
@@ -82,8 +62,6 @@ def apply_cleaning_action(df: pd.DataFrame, action: dict) -> pd.DataFrame:
         return df.drop(columns=[column])
 
     elif action_type == "flag_outliers":
-        # Outliers are flagged for review, not removed automatically —
-        # this just adds a marker column rather than deleting real data
         q1 = df[column].quantile(0.25)
         q3 = df[column].quantile(0.75)
         iqr = q3 - q1
