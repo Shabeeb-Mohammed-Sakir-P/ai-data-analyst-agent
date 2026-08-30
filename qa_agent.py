@@ -1,3 +1,4 @@
+import pandas as pd
 from llm_client import call_llm
 
 
@@ -55,9 +56,93 @@ Answer:"""
     return call_llm(prompt)
 
 
+def needs_live_data(question: str) -> bool:
+    """
+    Asks the LLM to classify whether this question needs a live calculation
+    on the raw dataset (like 'average age') versus something answerable
+    from the existing report/findings (like 'what was significant').
+    """
+    prompt = f"""Does answering this question require calculating a specific
+number or fact directly from raw data (like an average, count, min, max, or
+filter)? Or can it be answered from a general report/summary?
+
+Question: "{question}"
+
+Respond with ONLY one word: "DATA" or "REPORT"."""
+
+    response = call_llm(prompt).strip().upper()
+    return "DATA" in response
+
+
+def generate_pandas_query(question: str, columns: list) -> str:
+    """
+    Asks the LLM to translate a question into a single pandas expression
+    that computes the answer, using a DataFrame variable called 'df'.
+    """
+    prompt = f"""Convert this question into a SINGLE pandas expression using
+a DataFrame variable called `df`. The available columns are: {columns}
+
+IMPORTANT: text/categorical values in this dataset have been standardized to
+lowercase (e.g. "north" not "North"). When comparing or filtering on text
+columns, always use lowercase values, and consider using .str.lower() on
+the column for safety in case of any inconsistency.
+
+Question: "{question}"
+
+Respond with ONLY the Python expression, nothing else. No explanation,
+no code fences, no assignment (do not write "result = ..."), just the
+raw expression itself.
+
+Example: for "what is the average age?" respond exactly with:
+df['age'].mean()
+
+Example: for "how many customers are in the north region?" respond exactly with:
+(df['region'].str.lower() == 'north').sum()"""
+
+    expression = call_llm(prompt).strip()
+    expression = expression.strip("`").replace("python\n", "").strip()
+    return expression
+
+
+def safe_execute_query(df: pd.DataFrame, expression: str):
+    """
+    Executes a pandas expression in a RESTRICTED environment — only 'df'
+    and safe pandas functions are accessible. No file access, no imports,
+    no system commands are possible from within this sandbox.
+    """
+    allowed_names = {"df": df, "pd": pd}
+    try:
+        # eval (not exec) only computes an expression's value — it cannot
+        # run multi-line code or statements like imports or file writes.
+        # __builtins__ is explicitly emptied so things like open() or
+        # __import__() are not accessible from inside the expression.
+        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        return result, None
+    except Exception as e:
+        return None, str(e)
+
+
+def answer_question_with_data(question: str, df: pd.DataFrame) -> str:
+    """
+    Full live-query flow: translate question -> pandas expression ->
+    execute safely -> phrase the real result in plain English.
+    """
+    expression = generate_pandas_query(question, list(df.columns))
+    result, error = safe_execute_query(df, expression)
+
+    if error:
+        return f"I tried to calculate this but ran into an error: {error}"
+
+    prompt = f"""The user asked: "{question}"
+The calculated answer is: {result}
+
+Write a short, natural sentence answering the question using this exact result."""
+
+    return call_llm(prompt)
+
+
 # Quick test — only runs if you execute this file directly
 if __name__ == "__main__":
-    import pandas as pd
     from profiling_agent import analyze_dataset
     from cleaning_agent import apply_cleaning_action, propose_cleaning_actions
     from hypothesis_agent import generate_hypotheses
@@ -103,7 +188,11 @@ if __name__ == "__main__":
         if question.lower() in ("quit", "exit"):
             break
 
-        answer = answer_question(question, context, chat_history)
+        if needs_live_data(question):
+            answer = answer_question_with_data(question, df)
+        else:
+            answer = answer_question(question, context, chat_history)
+
         print(f"\nAssistant: {answer}\n")
 
         chat_history.append({"question": question, "answer": answer})
