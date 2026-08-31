@@ -12,7 +12,7 @@ def summarize_dataframe_for_llm(df: pd.DataFrame) -> dict:
     summary = {"columns": {}}
 
     for col in df.columns:
-        if pd.api.types.is_numeric_dtype(df[col]):
+        if pd.api.types.is_numeric_dtype(df[col]) and not pd.api.types.is_bool_dtype(df[col]):
             summary["columns"][col] = {
                 "type": "numeric",
                 "mean": round(df[col].mean(), 2),
