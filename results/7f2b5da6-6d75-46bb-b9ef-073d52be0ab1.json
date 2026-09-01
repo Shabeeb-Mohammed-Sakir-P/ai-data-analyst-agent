@@ -1,0 +1,296 @@
+{
+  "profiling_findings": {
+    "num_rows": 156,
+    "num_columns": 8,
+    "columns": [
+      "customer_id",
+      "name",
+      "age",
+      "signup_date",
+      "region",
+      "monthly_spend",
+      "email",
+      "is_active"
+    ],
+    "duplicate_rows": 6,
+    "missing_values": {
+      "age": "12 missing (7.7%)",
+      "region": "13 missing (8.3%)",
+      "monthly_spend": "12 missing (7.7%)"
+    },
+    "dtype_issues": [
+      {
+        "column": "age",
+        "percent_numeric": 99.3,
+        "example_bad_values": [
+          "unknown"
+        ]
+      }
+    ],
+    "category_inconsistencies": {
+      "region": {
+        "north": [
+          "North",
+          "north"
+        ],
+        "south": [
+          "SOUTH",
+          "South"
+        ]
+      },
+      "is_active": {
+        "yes": [
+          "yes",
+          "Yes"
+        ]
+      }
+    },
+    "outliers": {
+      "monthly_spend": 3
+    }
+  },
+  "cleaning_actions": [
+    {
+      "action": "remove_duplicates",
+      "column": "all",
+      "reason": "6 duplicate rows detected",
+      "severity": "medium"
+    },
+    {
+      "action": "impute_missing",
+      "column": "age",
+      "reason": "12 missing values (~7.7%)",
+      "severity": "medium"
+    },
+    {
+      "action": "impute_missing",
+      "column": "region",
+      "reason": "13 missing values (~8.3%)",
+      "severity": "medium"
+    },
+    {
+      "action": "impute_missing",
+      "column": "monthly_spend",
+      "reason": "12 missing values (~7.7%)",
+      "severity": "medium"
+    },
+    {
+      "action": "standardize_categories",
+      "column": "region",
+      "reason": "Inconsistent casing for North/South values",
+      "severity": "low"
+    },
+    {
+      "action": "standardize_categories",
+      "column": "is_active",
+      "reason": "Inconsistent casing for Yes values",
+      "severity": "low"
+    },
+    {
+      "action": "fix_dtype",
+      "column": "age",
+      "reason": "Non-numeric value 'unknown' detected",
+      "severity": "medium"
+    },
+    {
+      "action": "flag_outliers",
+      "column": "monthly_spend",
+      "reason": "3 outliers identified",
+      "severity": "low"
+    }
+  ],
+  "hypotheses": [
+    {
+      "hypothesis": "Does average monthly spend differ significantly between regions?",
+      "type": "group_comparison",
+      "columns_involved": [
+        "monthly_spend",
+        "region"
+      ]
+    },
+    {
+      "hypothesis": "Is there a significant positive correlation between customer age and monthly spend?",
+      "type": "correlation",
+      "columns_involved": [
+        "age",
+        "monthly_spend"
+      ]
+    },
+    {
+      "hypothesis": "Do active customers have higher monthly spend compared to inactive customers?",
+      "type": "group_comparison",
+      "columns_involved": [
+        "monthly_spend",
+        "is_active"
+      ]
+    },
+    {
+      "hypothesis": "Is there a temporal trend in monthly spend over the signup dates?",
+      "type": "trend",
+      "columns_involved": [
+        "signup_date",
+        "monthly_spend"
+      ]
+    },
+    {
+      "hypothesis": "Are customers with outlier monthly spend more likely to belong to a particular region?",
+      "type": "group_comparison",
+      "columns_involved": [
+        "monthly_spend_is_outlier",
+        "region"
+      ]
+    }
+  ],
+  "test_results": [
+    {
+      "hypothesis": "Does average monthly spend differ significantly between regions?",
+      "type": "group_comparison",
+      "test_used": "One-way ANOVA",
+      "p_value": 0.4647,
+      "significant": "False",
+      "note": null,
+      "statistic": 0.858
+    },
+    {
+      "hypothesis": "Is there a significant positive correlation between customer age and monthly spend?",
+      "type": "correlation",
+      "test_used": "Pearson correlation",
+      "p_value": 0.306,
+      "significant": "False",
+      "note": null,
+      "correlation_coefficient": -0.084
+    },
+    {
+      "hypothesis": "Do active customers have higher monthly spend compared to inactive customers?",
+      "type": "group_comparison",
+      "test_used": "One-way ANOVA",
+      "p_value": 0.6192,
+      "significant": "False",
+      "note": null,
+      "statistic": 0.595
+    },
+    {
+      "hypothesis": "Is there a temporal trend in monthly spend over the signup dates?",
+      "type": "trend",
+      "test_used": "Pearson correlation",
+      "p_value": 0.1444,
+      "significant": "False",
+      "note": null,
+      "correlation_coefficient": -0.12
+    },
+    {
+      "hypothesis": "Are customers with outlier monthly spend more likely to belong to a particular region?",
+      "type": "group_comparison",
+      "test_used": "One-way ANOVA",
+      "p_value": 0.4449,
+      "significant": "False",
+      "note": null,
+      "statistic": 0.896
+    }
+  ],
+  "chart_specs": [
+    {
+      "hypothesis": "Does average monthly spend differ significantly between regions?",
+      "chart_type": "bar",
+      "columns": [
+        "region",
+        "monthly_spend"
+      ],
+      "title": "Average Monthly Spend by Region"
+    },
+    {
+      "hypothesis": "Is there a significant positive correlation between customer age and monthly spend?",
+      "chart_type": "scatter",
+      "columns": [
+        "age",
+        "monthly_spend"
+      ],
+      "title": "Monthly Spend vs Age"
+    },
+    {
+      "hypothesis": "Do active customers have higher monthly spend compared to inactive customers?",
+      "chart_type": "bar",
+      "columns": [
+        "is_active",
+        "monthly_spend"
+      ],
+      "title": "Monthly Spend by Activity Status"
+    },
+    {
+      "hypothesis": "Is there a temporal trend in monthly spend over the signup dates?",
+      "chart_type": "line",
+      "columns": [
+        "signup_date",
+        "monthly_spend"
+      ],
+      "title": "Monthly Spend Over Signup Date"
+    },
+    {
+      "hypothesis": "Are customers with outlier monthly spend more likely to belong to a particular region?",
+      "chart_type": "bar",
+      "columns": [
+        "region",
+        "monthly_spend_is_outlier"
+      ],
+      "title": "Outlier Spend by Region"
+    }
+  ],
+  "chart_filepaths": [
+    "generated_charts\\Average_Monthly_Spend_by_Region.png",
+    "generated_charts\\Monthly_Spend_vs_Age.png",
+    "generated_charts\\Monthly_Spend_by_Activity_Status.png",
+    "generated_charts\\Monthly_Spend_Over_Signup_Date.png",
+    "generated_charts\\Outlier_Spend_by_Region.png"
+  ],
+  "fe_actions": [
+    {
+      "action": "drop_high_cardinality",
+      "column": "customer_id",
+      "reason": "Unique identifier with no predictive value",
+      "severity": "high"
+    },
+    {
+      "action": "scale_numeric",
+      "column": "age",
+      "reason": "Continuous numeric feature",
+      "severity": "medium"
+    },
+    {
+      "action": "scale_numeric",
+      "column": "monthly_spend",
+      "reason": "Continuous numeric feature",
+      "severity": "medium"
+    },
+    {
+      "action": "drop_high_cardinality",
+      "column": "name",
+      "reason": "High-cardinality string identifier",
+      "severity": "high"
+    },
+    {
+      "action": "drop_high_cardinality",
+      "column": "signup_date",
+      "reason": "Date feature not needed or too granular",
+      "severity": "high"
+    },
+    {
+      "action": "drop_high_cardinality",
+      "column": "email",
+      "reason": "High-cardinality string identifier",
+      "severity": "high"
+    },
+    {
+      "action": "one_hot_encode",
+      "column": "region",
+      "reason": "Low-cardinality categorical variable",
+      "severity": "medium"
+    },
+    {
+      "action": "label_encode",
+      "column": "is_active",
+      "reason": "Binary categorical variable",
+      "severity": "medium"
+    }
+  ],
+  "report": "### 1. Overview\nThe dataset contains 156 customer records across 8 profile attributes, capturing core demographic, tenure, and spending details. Overall data quality is moderate; while the dataset provides a helpful initial window into customer behavior, it requires data cleaning before it can be reliably used for strategic decision-making or statistical modeling. Addressing missing values, duplicate entries, and inconsistent formatting will ensure our business insights rest on a trustworthy foundation.\n\n---\n\n### 2. Data Quality Issues Found\nBefore analyzing trends, several data quality issues were identified that require cleanup:\n\n* **Duplicate Records:** Six identical rows were detected. Removing these duplicates is essential to avoid double-counting transactions and artificially skewing metrics.\n* **Missing Data:** Approximately 8% of customer records are missing values for age (12 rows), region (13 rows), and monthly spend (12 rows). We will need to fill these gaps using standard estimation techniques (imputation) to preserve data volume without introducing bias.\n* **Formatting and Typing Errors:** The `age` column contains text entries (such as the word `\"unknown\"`), which prevents numeric calculations. Additionally, capitalization inconsistencies exist in categorical fields\u2014such as mixing `\"North\"` and `\"north\"` or `\"Yes\"` and `\"yes\"`\u2014which must be standardized so systems treat them as identical categories.\n* **Extreme Outliers:** Three customer records reflect abnormally high monthly spend. These values need to be flagged and carefully evaluated so they do not distort broader financial reporting or model predictions.\n\n---\n\n### 3. Key Findings\nStatistical testing was conducted across several business hypotheses to evaluate what factors drive customer spending. None of the tested relationships reached statistical significance ($p > 0.05$). While unexpected, this is an important finding: it indicates that within this sample, customer spending is relatively uniform and not heavily influenced by demographic or tenure attributes.\n\n* **Spend by Region (Not Significant, $p = 0.46$):** Average monthly spend does not differ meaningfully across geographic regions. Marketing strategies do not need to segment spending expectations by territory based on this data.\n* **Age vs. Spend Correlation (Not Significant, $p = 0.31$):** There is no meaningful correlation between customer age and spending levels ($r = -0.08$). Older customers spend at similar rates to younger ones.\n* **Account Activity Status (Not Significant, $p = 0.62$):** Active customers do not demonstrate higher monthly spend compared to inactive customers. This suggests that account status alone is not currently a proxy for financial value.\n* **Signup Date Trends (Not Significant, $p = 0.14$):** Spending levels show no clear upward or downward trend based on when a customer originally signed up ($r = -0.12$).\n* **Outliers by Region (Not Significant, $p = 0.44$):** Unusually high spenders are distributed across regions rather than concentrated in one specific territory.\n\n---\n\n### 4. Visualizations\nTo help visualize these relationships, five reference charts have been generated:\n\n1. **Average Monthly Spend by Region (Bar Chart):** Compares mean expenditure across regions, visually reinforcing the uniform spending levels across territories.\n2. **Monthly Spend vs. Age (Scatter Plot):** Plots individual customer spend against age, illustrating the lack of a upward or downward spending trend across age groups.\n3. **Monthly Spend by Activity Status (Bar Chart):** Displays side-by-side spend averages for active versus inactive accounts, showing comparable financial performance across both groups.\n4. **Monthly Spend Over Signup Date (Line Chart):** Maps customer spend along a timeline of account creation dates to highlight the absence of temporal spending trends.\n5. **Outlier Spend by Region (Bar Chart):** Tracks the presence of extreme spending accounts across regions to verify that high-value anomalies are spread evenly.\n\n---\n\n### 5. Readiness for Modeling\nThe current dataset is not immediately ready to train a machine learning model. To prepare the data for predictive algorithms, the following feature engineering steps must be executed:\n\n1. **Remove Non-Predictive Identifiers:** Columns such as `customer_id`, `name`, `email`, and raw `signup_date` contain unique, high-cardinality text strings. These offer no generalizable predictive value and must be removed to prevent models from memorizing specific records (overfitting).\n2. **Categorical Encoding:** Algorithms require numeric inputs. We must convert categorical text fields into numeric formats by applying **one-hot encoding** to `region` (creating separate binary indicator columns for each area) and **label encoding** to `is_active` (converting values to simple 0/1 flags).\n3. **Numeric Scaling:** Continuous numerical variables (`age` and `monthly_spend`) should be scaled to a standardized range. This prevents attributes with larger raw numbers from disproportionately dominating model calculations."
+}
