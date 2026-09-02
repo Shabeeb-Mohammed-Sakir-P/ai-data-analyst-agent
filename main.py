@@ -4,13 +4,20 @@ import shutil
 import json
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from pipeline import build_pipeline
-from database import get_db, Dataset
+from database import get_db, Dataset, User
+from auth import hash_password, verify_password, create_access_token, get_current_user
 
 app = FastAPI(title="AI Data Analyst Agent")
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+class UserCredentials(BaseModel):
+    email: str
+    password: str
 
 
 @app.get("/")
@@ -23,11 +30,50 @@ def health_check():
     return {"health": "ok"}
 
 
+@app.post("/signup")
+def signup(credentials: UserCredentials, db: Session = Depends(get_db)):
+    """
+    Creates a new user account with a securely hashed password.
+    """
+    existing_user = db.query(User).filter(User.email == credentials.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    new_user = User(
+        id=str(uuid.uuid4()),
+        email=credentials.email,
+        hashed_password=hash_password(credentials.password),
+    )
+    db.add(new_user)
+    db.commit()
+
+    token = create_access_token(new_user.id)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/login")
+def login(credentials: UserCredentials, db: Session = Depends(get_db)):
+    """
+    Verifies email/password and returns a JWT access token if correct.
+    """
+    user = db.query(User).filter(User.email == credentials.email).first()
+
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    token = create_access_token(user.id)
+    return {"access_token": token, "token_type": "bearer"}
+
+
 @app.post("/upload")
-async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_dataset(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Accepts a CSV file upload, saves it to disk, and creates a database
-    record to track it through its analysis lifecycle.
+    record linked to the logged-in user.
     """
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
@@ -38,7 +84,12 @@ async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    new_dataset = Dataset(dataset_id=dataset_id, filename=file.filename, status="uploaded")
+    new_dataset = Dataset(
+        dataset_id=dataset_id,
+        filename=file.filename,
+        status="uploaded",
+        owner_id=current_user.id,
+    )
     db.add(new_dataset)
     db.commit()
 
@@ -48,8 +99,6 @@ async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get
 def run_pipeline_in_background(dataset_id: str, filepath: str):
     """
     Runs the full agent pipeline and saves results to the database.
-    Creates its own database session since this runs outside the normal
-    request lifecycle.
     """
     from database import SessionLocal
     db = SessionLocal()
@@ -90,13 +139,21 @@ def run_pipeline_in_background(dataset_id: str, filepath: str):
 
 
 @app.post("/analyze/{dataset_id}")
-def start_analysis(dataset_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def start_analysis(
+    dataset_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Triggers the full agent pipeline on a previously uploaded dataset.
+    Only the dataset's owner can trigger analysis on it.
     """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    if dataset.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have access to this dataset")
 
     filepath = os.path.join(UPLOAD_DIR, f"{dataset_id}.csv")
     background_tasks.add_task(run_pipeline_in_background, dataset_id, filepath)
@@ -105,14 +162,19 @@ def start_analysis(dataset_id: str, background_tasks: BackgroundTasks, db: Sessi
 
 
 @app.get("/status/{dataset_id}")
-def get_status(dataset_id: str, db: Session = Depends(get_db)):
+def get_status(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    Checks whether a pipeline run has finished, reading from the database
-    instead of an in-memory dictionary — this survives server restarts.
+    Checks whether a pipeline run has finished. Only the owner can check.
     """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    if dataset.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have access to this dataset")
 
     return {
         "dataset_id": dataset_id,
@@ -122,12 +184,20 @@ def get_status(dataset_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/results/{dataset_id}")
-def get_results(dataset_id: str, db: Session = Depends(get_db)):
+def get_results(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    Returns the final pipeline results, read from the database.
+    Returns the final pipeline results. Only the owner can view them.
     """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
-    if not dataset or not dataset.results_json:
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if dataset.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have access to this dataset")
+    if not dataset.results_json:
         raise HTTPException(status_code=404, detail="Results not found or not ready yet")
 
     return json.loads(dataset.results_json)

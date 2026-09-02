@@ -12,8 +12,6 @@ Base = declarative_base()
 class Dataset(Base):
     """
     Represents one uploaded dataset and its analysis lifecycle.
-    This replaces the in-memory job_status dictionary with something
-    that survives a server restart.
     """
     __tablename__ = "datasets"
 
@@ -23,9 +21,22 @@ class Dataset(Base):
     results_json = Column(Text, nullable=True)  # stores the pipeline results as JSON text
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     error_message = Column(Text, nullable=True)
+    owner_id = Column(String, nullable=True)  # links to User.id; nullable for now, for backward compatibility
 
 
-# Creates the actual database file and table, if they don't already exist
+class User(Base):
+    """
+    Represents a registered user of the app.
+    """
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# Creates the actual database file and tables, if they don't already exist
 Base.metadata.create_all(bind=engine)
 
 
