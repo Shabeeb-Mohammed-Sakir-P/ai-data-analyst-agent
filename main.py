@@ -3,6 +3,8 @@ import uuid
 import shutil
 import json
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from pipeline import build_pipeline
@@ -10,6 +12,16 @@ from database import get_db, Dataset, User
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
 app = FastAPI(title="AI Data Analyst Agent")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/charts", StaticFiles(directory="generated_charts"), name="charts")
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
