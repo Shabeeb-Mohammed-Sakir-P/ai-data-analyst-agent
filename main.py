@@ -36,6 +36,11 @@ class ApprovedActions(BaseModel):
     approved_actions: list
 
 
+class ChatMessage(BaseModel):
+    question: str
+    chat_history: list = []
+
+
 @app.get("/")
 def read_root():
     return {"status": "Backend is alive", "project": "AI Data Analyst Agent"}
@@ -48,9 +53,6 @@ def health_check():
 
 @app.post("/signup")
 def signup(credentials: UserCredentials, db: Session = Depends(get_db)):
-    """
-    Creates a new user account with a securely hashed password.
-    """
     existing_user = db.query(User).filter(User.email == credentials.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -69,9 +71,6 @@ def signup(credentials: UserCredentials, db: Session = Depends(get_db)):
 
 @app.post("/login")
 def login(credentials: UserCredentials, db: Session = Depends(get_db)):
-    """
-    Verifies email/password and returns a JWT access token if correct.
-    """
     user = db.query(User).filter(User.email == credentials.email).first()
 
     if not user or not verify_password(credentials.password, user.hashed_password):
@@ -87,10 +86,6 @@ async def upload_dataset(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Accepts a CSV file upload, saves it to disk, and creates a database
-    record linked to the logged-in user.
-    """
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
 
@@ -118,11 +113,6 @@ def preview_cleaning(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Runs Profiling + proposes Cleaning actions WITHOUT applying them.
-    Returns the list so the user can approve/reject each one before
-    the full pipeline runs.
-    """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -140,10 +130,6 @@ def preview_cleaning(
 
 
 def run_pipeline_in_background(dataset_id: str, filepath: str, approved_actions: list):
-    """
-    Runs the full agent pipeline and saves results to the database.
-    Uses the user-approved cleaning actions instead of auto-approving.
-    """
     from database import SessionLocal
     db = SessionLocal()
 
@@ -194,10 +180,6 @@ def start_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Triggers the full agent pipeline on a previously uploaded dataset,
-    using only the cleaning actions the user approved.
-    """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -218,9 +200,6 @@ def get_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Checks whether a pipeline run has finished. Only the owner can check.
-    """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -241,9 +220,6 @@ def get_results(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Returns the final pipeline results. Only the owner can view them.
-    """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -253,3 +229,43 @@ def get_results(
         raise HTTPException(status_code=404, detail="Results not found or not ready yet")
 
     return json.loads(dataset.results_json)
+
+
+@app.post("/chat/{dataset_id}")
+def chat_with_results(
+    dataset_id: str,
+    message: ChatMessage,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Answers a question about the analysis, using either the report/findings
+    context or live data querying, depending on what the question needs.
+    """
+    dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if dataset.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have access to this dataset")
+    if not dataset.results_json:
+        raise HTTPException(status_code=404, detail="Results not ready yet")
+
+    import pandas as pd
+    from qa_agent import build_context_summary, answer_question, needs_live_data, answer_question_with_data
+
+    results = json.loads(dataset.results_json)
+    context = build_context_summary(
+        results.get("profiling_findings"),
+        results.get("hypotheses"),
+        results.get("test_results"),
+        results.get("report"),
+    )
+
+    if needs_live_data(message.question):
+        filepath = os.path.join(UPLOAD_DIR, f"{dataset_id}.csv")
+        df = pd.read_csv(filepath)
+        answer = answer_question_with_data(message.question, df)
+    else:
+        answer = answer_question(message.question, context, message.chat_history)
+
+    return {"answer": answer}
