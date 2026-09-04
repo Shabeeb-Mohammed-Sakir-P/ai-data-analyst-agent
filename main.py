@@ -32,6 +32,10 @@ class UserCredentials(BaseModel):
     password: str
 
 
+class ApprovedActions(BaseModel):
+    approved_actions: list
+
+
 @app.get("/")
 def read_root():
     return {"status": "Backend is alive", "project": "AI Data Analyst Agent"}
@@ -108,9 +112,37 @@ async def upload_dataset(
     return {"dataset_id": dataset_id, "filename": file.filename}
 
 
-def run_pipeline_in_background(dataset_id: str, filepath: str):
+@app.post("/preview/{dataset_id}")
+def preview_cleaning(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Runs Profiling + proposes Cleaning actions WITHOUT applying them.
+    Returns the list so the user can approve/reject each one before
+    the full pipeline runs.
+    """
+    dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if dataset.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have access to this dataset")
+
+    from profiling_agent import analyze_dataset
+    from cleaning_agent import propose_cleaning_actions
+
+    filepath = os.path.join(UPLOAD_DIR, f"{dataset_id}.csv")
+    findings = analyze_dataset(filepath)
+    proposed_actions = propose_cleaning_actions(findings)
+
+    return {"profiling_findings": findings, "proposed_actions": proposed_actions}
+
+
+def run_pipeline_in_background(dataset_id: str, filepath: str, approved_actions: list):
     """
     Runs the full agent pipeline and saves results to the database.
+    Uses the user-approved cleaning actions instead of auto-approving.
     """
     from database import SessionLocal
     db = SessionLocal()
@@ -121,7 +153,11 @@ def run_pipeline_in_background(dataset_id: str, filepath: str):
         db.commit()
 
         pipeline = build_pipeline()
-        final_state = pipeline.invoke({"dataset_id": dataset_id, "filepath": filepath})
+        final_state = pipeline.invoke({
+            "dataset_id": dataset_id,
+            "filepath": filepath,
+            "approved_cleaning_actions": approved_actions,
+        })
 
         result_to_save = {
             "profiling_findings": final_state.get("profiling_findings"),
@@ -153,13 +189,14 @@ def run_pipeline_in_background(dataset_id: str, filepath: str):
 @app.post("/analyze/{dataset_id}")
 def start_analysis(
     dataset_id: str,
+    approved: ApprovedActions,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Triggers the full agent pipeline on a previously uploaded dataset.
-    Only the dataset's owner can trigger analysis on it.
+    Triggers the full agent pipeline on a previously uploaded dataset,
+    using only the cleaning actions the user approved.
     """
     dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
     if not dataset:
@@ -168,7 +205,9 @@ def start_analysis(
         raise HTTPException(status_code=403, detail="You do not have access to this dataset")
 
     filepath = os.path.join(UPLOAD_DIR, f"{dataset_id}.csv")
-    background_tasks.add_task(run_pipeline_in_background, dataset_id, filepath)
+    background_tasks.add_task(
+        run_pipeline_in_background, dataset_id, filepath, approved.approved_actions
+    )
 
     return {"dataset_id": dataset_id, "status": "processing"}
 

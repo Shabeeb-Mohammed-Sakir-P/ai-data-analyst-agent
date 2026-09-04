@@ -30,6 +30,7 @@ def update_progress(dataset_id: str, step: str):
 class PipelineState(TypedDict):
     dataset_id: str
     filepath: str
+    approved_cleaning_actions: Optional[list]
     df: Optional[pd.DataFrame]
     profiling_findings: Optional[dict]
     cleaning_actions: Optional[list]
@@ -51,9 +52,9 @@ def profiling_node(state: PipelineState) -> dict:
 
 def cleaning_node(state: PipelineState) -> dict:
     update_progress(state["dataset_id"], "cleaning")
-    print("Running Cleaning Agent...")
-    actions = propose_cleaning_actions(state["profiling_findings"])
+    print("Applying approved Cleaning actions...")
 
+    actions = state.get("approved_cleaning_actions") or []
     df = state["df"]
     for action in actions:
         try:
@@ -143,7 +144,19 @@ if __name__ == "__main__":
     pipeline = build_pipeline()
 
     print("Starting full pipeline run...\n")
-    final_state = pipeline.invoke({"dataset_id": "test-run", "filepath": "data/sample_messy_customers.csv"})
+    final_state = pipeline.invoke({
+        "dataset_id": "test-run",
+        "filepath": "data/sample_messy_customers.csv",
+        "approved_cleaning_actions": [
+            {"action": "remove_duplicates", "column": "all"},
+            {"action": "standardize_categories", "column": "region"},
+            {"action": "standardize_categories", "column": "is_active"},
+            {"action": "fix_dtype", "column": "age"},
+            {"action": "impute_missing", "column": "age"},
+            {"action": "impute_missing", "column": "monthly_spend"},
+            {"action": "impute_missing", "column": "region"},
+        ],
+    })
 
     print("\n" + "=" * 60)
     print("PIPELINE COMPLETE")
