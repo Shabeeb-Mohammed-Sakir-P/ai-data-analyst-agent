@@ -23,7 +23,10 @@ ONLY a JSON array (no other text, no code fences) where each item has:
   matches from this list of actual dataset columns: {available_columns}
 - "title": a short, clear chart title
 
-Only include hypotheses where a chart would genuinely add value. Do NOT
+Generate a chart for EVERY hypothesis in the list below, regardless of
+whether the result was statistically significant — visualizing non-significant
+results is just as valuable as significant ones, since it helps confirm
+the absence of a pattern. Do NOT
 invent column names — only use names from the provided list exactly as written.
 
 Results:

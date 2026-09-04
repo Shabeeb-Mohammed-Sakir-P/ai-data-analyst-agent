@@ -121,7 +121,7 @@ def run_pipeline_in_background(dataset_id: str, filepath: str):
         db.commit()
 
         pipeline = build_pipeline()
-        final_state = pipeline.invoke({"filepath": filepath})
+        final_state = pipeline.invoke({"dataset_id": dataset_id, "filepath": filepath})
 
         result_to_save = {
             "profiling_findings": final_state.get("profiling_findings"),
@@ -191,6 +191,7 @@ def get_status(
     return {
         "dataset_id": dataset_id,
         "status": dataset.status,
+        "current_step": dataset.current_step,
         "error_message": dataset.error_message,
     }
 

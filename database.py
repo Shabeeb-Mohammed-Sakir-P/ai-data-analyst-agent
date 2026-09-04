@@ -17,11 +17,12 @@ class Dataset(Base):
 
     dataset_id = Column(String, primary_key=True)
     filename = Column(String)
-    status = Column(String, default="uploaded")  # uploaded -> processing -> complete/failed
-    results_json = Column(Text, nullable=True)  # stores the pipeline results as JSON text
+    status = Column(String, default="uploaded")
+    current_step = Column(String, nullable=True)
+    results_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     error_message = Column(Text, nullable=True)
-    owner_id = Column(String, nullable=True)  # links to User.id; nullable for now, for backward compatibility
+    owner_id = Column(String, nullable=True)
 
 
 class User(Base):
@@ -36,15 +37,10 @@ class User(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
-# Creates the actual database file and tables, if they don't already exist
 Base.metadata.create_all(bind=engine)
 
 
 def get_db():
-    """
-    Provides a database session for a single request, and guarantees
-    it's properly closed afterward — even if an error occurs.
-    """
     db = SessionLocal()
     try:
         yield db

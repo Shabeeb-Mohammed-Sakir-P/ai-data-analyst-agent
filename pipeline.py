@@ -11,7 +11,24 @@ from feature_engineering_agent import analyze_for_feature_engineering, propose_f
 from report_agent import generate_report
 
 
+def update_progress(dataset_id: str, step: str):
+    """
+    Updates the database with which agent is currently running,
+    so the frontend can display live progress.
+    """
+    from database import SessionLocal, Dataset
+    db = SessionLocal()
+    try:
+        dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
+        if dataset:
+            dataset.current_step = step
+            db.commit()
+    finally:
+        db.close()
+
+
 class PipelineState(TypedDict):
+    dataset_id: str
     filepath: str
     df: Optional[pd.DataFrame]
     profiling_findings: Optional[dict]
@@ -25,6 +42,7 @@ class PipelineState(TypedDict):
 
 
 def profiling_node(state: PipelineState) -> dict:
+    update_progress(state["dataset_id"], "profiling")
     print("Running Profiling Agent...")
     df = pd.read_csv(state["filepath"])
     findings = analyze_dataset(state["filepath"])
@@ -32,12 +50,10 @@ def profiling_node(state: PipelineState) -> dict:
 
 
 def cleaning_node(state: PipelineState) -> dict:
+    update_progress(state["dataset_id"], "cleaning")
     print("Running Cleaning Agent...")
     actions = propose_cleaning_actions(state["profiling_findings"])
 
-    # PLACEHOLDER: auto-approve every proposed action for now.
-    # Once the frontend exists (Phase 5), this is where we pause and wait
-    # for real human approval/rejection of each action instead.
     df = state["df"]
     for action in actions:
         try:
@@ -49,18 +65,21 @@ def cleaning_node(state: PipelineState) -> dict:
 
 
 def hypothesis_node(state: PipelineState) -> dict:
+    update_progress(state["dataset_id"], "hypothesis")
     print("Running Hypothesis Agent...")
     hypotheses = generate_hypotheses(state["df"])
     return {"hypotheses": hypotheses}
 
 
 def statistical_testing_node(state: PipelineState) -> dict:
+    update_progress(state["dataset_id"], "statistical_testing")
     print("Running Statistical Testing Agent...")
     results = [run_statistical_test(state["df"], h) for h in state["hypotheses"]]
     return {"test_results": results}
 
 
 def visualization_node(state: PipelineState) -> dict:
+    update_progress(state["dataset_id"], "visualization")
     print("Running Visualization Agent...")
     df = state["df"]
     specs = decide_chart_types(state["test_results"], list(df.columns))
@@ -75,16 +94,15 @@ def visualization_node(state: PipelineState) -> dict:
 
 
 def feature_engineering_node(state: PipelineState) -> dict:
+    update_progress(state["dataset_id"], "feature_engineering")
     print("Running Feature Engineering Agent...")
     analysis = analyze_for_feature_engineering(state["df"])
     actions = propose_feature_engineering_actions(analysis)
-
-    # Same placeholder note as cleaning_node — auto-approved for now,
-    # will become a real human approval step once the frontend exists.
     return {"fe_actions": actions}
 
 
 def report_node(state: PipelineState) -> dict:
+    update_progress(state["dataset_id"], "report")
     print("Running Report Agent...")
     report = generate_report(
         state["profiling_findings"],
@@ -125,7 +143,7 @@ if __name__ == "__main__":
     pipeline = build_pipeline()
 
     print("Starting full pipeline run...\n")
-    final_state = pipeline.invoke({"filepath": "data/sample_messy_customers.csv"})
+    final_state = pipeline.invoke({"dataset_id": "test-run", "filepath": "data/sample_messy_customers.csv"})
 
     print("\n" + "=" * 60)
     print("PIPELINE COMPLETE")
