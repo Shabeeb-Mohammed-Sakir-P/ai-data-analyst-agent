@@ -20,8 +20,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+CHARTS_DIR = "generated_charts"
+os.makedirs(CHARTS_DIR, exist_ok=True)
 
-app.mount("/charts", StaticFiles(directory="generated_charts"), name="charts")
+app.mount("/charts", StaticFiles(directory=CHARTS_DIR), name="charts")
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
