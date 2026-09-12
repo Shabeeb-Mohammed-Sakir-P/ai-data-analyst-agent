@@ -15,11 +15,8 @@ app = FastAPI(title="AI Data Analyst Agent")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://ai-data-analyst-frontend-omega.vercel.app",
-        "https://ai-data-analyst-frontend-ja823kevt-shabeeb-s-projects.vercel.app",
-    ],
+    allow_origins=["http://localhost:5173", "http://localhost:8080"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
