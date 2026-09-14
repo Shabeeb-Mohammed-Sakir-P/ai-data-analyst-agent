@@ -99,10 +99,11 @@ def upload_dataset_to_storage(dataset_id: str, file: UploadFile):
 
     try:
         file.file.seek(0)
+        file_bytes = file.file.read()
 
         supabase.storage.from_(STORAGE_BUCKET).upload(
             path=storage_path,
-            file=file.file,
+            file=file_bytes,
             file_options={
                 "content-type": "text/csv",
                 "upsert": "false",
@@ -117,7 +118,6 @@ def upload_dataset_to_storage(dataset_id: str, file: UploadFile):
             status_code=500,
             detail="Failed to store the uploaded dataset."
         )
-
 
 def download_dataset_to_tempfile(dataset_id: str) -> str:
     """
